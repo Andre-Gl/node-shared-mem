@@ -15,8 +15,7 @@
   },
   "scripts": {
     "build": "node-gyp rebuild --release",
-    "test": "tape test.js",
-    "prebuild": "prebuildify --all --strip"
+    "test": "tape test.js"
   },
   "repository": {
     "type": "git",
