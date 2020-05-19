@@ -67,7 +67,7 @@ std::string GetLastErrorAsString()
 
 Napi::FunctionReference SharedMemory::constructor;
 
-SharedMemory::SharedMemory(const Napi::CallbackInfo& info) : Napi::ObjectWrap<SharedMemory>(info) 
+SharedMemory::SharedMemory(const Napi::CallbackInfo& info) : Napi::ObjectWrap<SharedMemory>(info)
 {
 	Napi::Env env = info.Env();
 	Napi::HandleScope scope(env);
@@ -83,7 +83,18 @@ SharedMemory::SharedMemory(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Sh
 	auto len = (int64_t)info[1].As<Napi::Number>();
 	auto create = (bool)info[2].As<Napi::Boolean>();
 #ifdef _WIN32
-	HANDLE mapping = OpenFileMapping(FILE_MAP_ALL_ACCESS, false, path.c_str());
+	HANDLE mapping = nullptr;
+	if (create) {
+		mapping = CreateFileMapping(
+                 INVALID_HANDLE_VALUE,    // use paging file
+                 NULL,                    // default security
+                 PAGE_READWRITE,          // read/write access
+                 0,                       // maximum object size (high-order DWORD)
+                 len,                     // maximum object size (low-order DWORD)
+                 path.c_str());           // name of mapping object
+	} else {
+		mapping = OpenFileMapping(FILE_MAP_ALL_ACCESS, false, path.c_str());
+	}
 	if (mapping == nullptr) {
 		auto err = GetLastErrorAsString();
 		fail("[SharedMemory] could not open \"%s\" (ERROR: %s)", path.c_str(), err.c_str());
@@ -98,14 +109,14 @@ SharedMemory::SharedMemory(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Sh
 
 	this->handle = mapping;
 #else
-	
+
     char filePath[4096];
     sprintf(filePath, "/%s", path.c_str());
-    
+
 	int key = -1;
 	if (create) {
 		key = shm_open(filePath, O_CREAT | O_RDWR, 0666);
-		ftruncate(key, len); 
+		ftruncate(key, len);
 	} else {
 		key = shm_open(filePath, O_RDWR, 0666);
 	}
@@ -119,7 +130,7 @@ SharedMemory::SharedMemory(const Napi::CallbackInfo& info) : Napi::ObjectWrap<Sh
 		fail("[SharedMemory] could not map \"%s\" (f%d) (ERROR: %s)", path.c_str(), key, strerror(errno));
 	}
 	this->handle = key;
-	
+
 
 #endif
 
@@ -147,7 +158,7 @@ Napi::Object SharedMemory::Init(Napi::Env env, Napi::Object exports) {
 }
 
 Napi::Value SharedMemory::Close(const Napi::CallbackInfo& info) {
-	
+
 	Napi::Env env = info.Env();
 
 	auto hasName = this->Value().Get("name").IsString();
@@ -174,15 +185,15 @@ Napi::Value SharedMemory::Close(const Napi::CallbackInfo& info) {
 #else
 
 	if(this->ptr != nullptr) {
-		if(munmap(this->ptr, this->length) != 0) { 
+		if(munmap(this->ptr, this->length) != 0) {
 			close(this->handle);
-			failv("[SharedMemory] could not unmap \"%s\" (ERROR: %s)", name, strerror(errno)); 
+			failv("[SharedMemory] could not unmap \"%s\" (ERROR: %s)", name, strerror(errno));
 		}
 		this->ptr = nullptr;
 	}
 	if(this->handle != 0) {
 		if(close(this->handle) != 0) {
-			failv("[SharedMemory] could not close \"%s\" (ERROR: %s)", name, strerror(errno)); 
+			failv("[SharedMemory] could not close \"%s\" (ERROR: %s)", name, strerror(errno));
 		}
 		this->handle = 0;
 	}
